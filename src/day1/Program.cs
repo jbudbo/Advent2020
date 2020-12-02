@@ -20,13 +20,11 @@ namespace day1
             Console.WriteLine(q1.Value);
 
             var q2 = data
-                .TripleWhere(t => t.Item1 + t.Item2 + t.Item3 == 2020)
-                .Select(t => t.Item1 * t.Item2 * t.Item3);
+                .DistinctGroup(3)
+                .Select(g => new KeyValuePair<int, int>(g.Aggregate(Add), g.Aggregate(Mult)))
+                .Single(For2020);
 
-            foreach (var c in q2)
-            {
-                Console.WriteLine(c);
-            }
+            Console.WriteLine(q2.Value);
 
             Console.ReadLine();
         }
@@ -52,56 +50,46 @@ namespace day1
 
     internal static class Extensions
     {
+        internal static KeyValuePair<T, T[]> HT<T>(T[] source) => new(source[0], source[1..]);
+
         internal static IEnumerable<T[]> DistinctGroup<T>(this IEnumerable<T> source, int size = 2)
         {
             //  If we get smaller than 2 just return singles
             if (size < 2) return null;
 
-            //  There has to be a way to genericize this by taking in a group size
-            //      and squashing these windows recursively. Need to look into this
-            static KeyValuePair<T, T[]> HT(T[] arr) => new(arr[0], arr[1..]);
+            T[] outBuf = new T[size];
 
-            IEnumerable<KeyValuePair<T,T>> getForSource(T[] source)
+            IEnumerable<T[]> getForSource(T[] source, int depth)
             {
                 if (source.Length < size) yield break;
 
                 var (head, tail) = HT(source);
 
-                foreach (var t in tail)
-                    yield return new(head, t);
+                outBuf[depth] = head;
 
-                foreach (var kvp in getForSource(tail))
-                    yield return kvp;
-            }
-
-            //  Buffer the IEnumerable to prevent changes during enumeration
-            T[] ts = source.ToArray();
-
-            return getForSource(ts).Select(x => new T[]{ x.Key, x.Value });
-        }
-
-        internal static IEnumerable<(T, T, T)> TripleWhere<T>(this IEnumerable<T> source, Predicate<(T, T, T)> predicate)
-        {
-            //  Buffer the IEnumerable to prevent changes during enumeration
-            T[] ts = source.ToArray();
-            (T, T, T) set;
-
-            for (int a = 0, b = ts.Length; a < b; a++)
-            {
-                var x = ts[a];
-                for (int c = a + 1, d = ts.Length - 1; c < d; c++)
+                if (depth < size - 2)
                 {
-                    var y = ts[c];
-
-                    foreach (T data in ts[(c + 1)..])
+                    foreach (var heads in getForSource(tail, depth + 1))
+                        yield return heads;
+                }
+                else
+                {
+                    //  We're at the end, start tailing
+                    foreach (var t in tail)
                     {
-                        set = (x, y, data);
-
-                        if (predicate(set))
-                            yield return set;
+                        outBuf[size - 1] = t;
+                        yield return outBuf;
                     }
                 }
+
+                foreach (var nSource in getForSource(tail, depth))
+                    yield return nSource;
             }
+
+            //  Buffer the IEnumerable to prevent changes during enumeration
+            T[] ts = source.ToArray();
+
+            return getForSource(ts, 0);
         }
     }
 }
